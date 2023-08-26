@@ -1,0 +1,66 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+	<title>Project 1 - Robin Fishman</title>
+	<script>
+		let base_canvas;
+		let currentFrameNumber = 0;
+		let sceneList = [];
+
+		function Rectangle(x, y, color) {
+			this.x = x;
+			this.y = y;
+			this.color = color;
+
+			sceneList.push(this);
+
+			this.draw = function () {
+				base_canvas = document.getElementById("base_canvas");
+				const ctx = base_canvas.getContext("2d");
+
+				ctx.fillStyle = `${this.color}`;
+				ctx.fillRect(this.x, this.y, 40, 40);
+				ctx.strokeRect(this.x, this.y, 40, 40);
+			}
+		}
+
+		function updateAndDraw() {
+			new Rectangle(Math.random() * 300, Math.random() * 250, `rgb(${Math.random() * 255}, ${Math.random() * 255}, ${Math.random() * 255})`);
+
+			for (let rect of sceneList)
+				rect.draw();
+
+			window.requestAnimationFrame(updateAndDraw);
+			++currentFrameNumber;
+			
+			updateStats();
+		}
+
+		function updateStats() {
+			let frameCountText = document.getElementById("frame_counter");
+			frameCountText.innerText = "Frame Count: " + currentFrameNumber;
+
+			let rectangleCountText = document.getElementById("rectangle_counter");
+			rectangleCountText.innerText = "Rectangle Count: " + sceneList.length;
+		}
+
+		function init() {
+			let rect1 = new Rectangle(20, 20, "rgb(0, 255, 0)");
+			let rect2 = new Rectangle(70, 20, "rgb(0, 255, 0)");
+			let rect3 = new Rectangle(120, 20, "rgb(0, 255, 0)");
+
+			updateAndDraw();
+		}
+	</script>
+</head>
+
+<body onload="init()">
+	<canvas id="base_canvas" style="width: 300px; height: 200px; border: 1px solid gray;">
+
+	</canvas><br>
+	<p id="frame_counter">Frame Count: 0</p>
+	<p id="rectangle_counter">Rectangle Count: 0</p>
+</body>
+
+</html>
