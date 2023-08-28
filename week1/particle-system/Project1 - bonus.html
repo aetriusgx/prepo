@@ -2,7 +2,7 @@
 <html>
 
 <head>
-	<title>Project 1 - Robin Fishman</title>
+	<title>Project 1 (bonus) - Robin Fishman</title>
 	<script>
 		let base_canvas;
 		let currentFrameNumber = 0;
@@ -15,7 +15,7 @@
 			this.list_pos;
 
 			this.velocity = {
-				x: 0,
+				x: 1,
 				y: 1
 			}
 
@@ -24,21 +24,23 @@
 
 		let RectanglePrototype = {
 			update: function() {
-				if (this.y > 300) {
+				if (this.y > 200 || this.x > 300) {
 					sceneList.splice(sceneList.indexOf(this), 1);
 				}
 
 				++this.velocity.y;
 
-				this.y = this.y + this.velocity.y * 0.16;
+				this.y += this.velocity.y * 0.1;
+				// Have it move like an arrow, sorta.
+				this.x += this.velocity.x * 10;
 			},
 			draw: function () {
 				base_canvas = document.getElementById("base_canvas");
 				const ctx = base_canvas.getContext("2d");
 
 				ctx.fillStyle = `${this.color}`;
-				ctx.fillRect(this.x, this.y, 40, 40);
-				ctx.strokeRect(this.x, this.y, 40, 40);
+				ctx.fillRect(this.x, this.y, 40, 10);
+				ctx.strokeRect(this.x, this.y, 40, 10);
 			}
 		};
 
@@ -49,7 +51,7 @@
 			const ctx = base_canvas.getContext("2d");
 			ctx.clearRect(0, 0, 300, 200);
 
-			new Rectangle(Math.random() * 300, Math.random() * 250, `rgb(${Math.random() * 255}, ${Math.random() * 255}, ${Math.random() * 255})`);
+			new Rectangle(Math.random() * 300, Math.random() * 100, `rgb(${Math.random() * 255}, ${Math.random() * 255}, ${Math.random() * 255})`);
 
 			for (let rect of sceneList){
 				rect.draw();
