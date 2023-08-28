@@ -12,10 +12,27 @@
 			this.x = x;
 			this.y = y;
 			this.color = color;
+			this.list_pos;
 
-			sceneList.push(this);
+			this.velocity = {
+				x: 0,
+				y: 1
+			}
 
-			this.draw = function () {
+			this.list_pos = sceneList.push(this) - 1;
+		}
+
+		let RectanglePrototype = {
+			update: function() {
+				++this.velocity.y;
+
+				this.y = this.y + this.velocity.y * 0.16;
+
+				if (this.y > 300) {
+					sceneList.splice(this.list_pos, 1);
+				}
+			},
+			draw: function () {
 				base_canvas = document.getElementById("base_canvas");
 				const ctx = base_canvas.getContext("2d");
 
@@ -23,13 +40,21 @@
 				ctx.fillRect(this.x, this.y, 40, 40);
 				ctx.strokeRect(this.x, this.y, 40, 40);
 			}
-		}
+		};
+
+		Rectangle.prototype = RectanglePrototype;
 
 		function updateAndDraw() {
+			base_canvas = document.getElementById("base_canvas");
+			const ctx = base_canvas.getContext("2d");
+			ctx.clearRect(0, 0, 300, 200);
+
 			new Rectangle(Math.random() * 300, Math.random() * 250, `rgb(${Math.random() * 255}, ${Math.random() * 255}, ${Math.random() * 255})`);
 
-			for (let rect of sceneList)
+			for (let rect of sceneList){
 				rect.draw();
+				rect.update();
+			}
 
 			window.requestAnimationFrame(updateAndDraw);
 			++currentFrameNumber;
