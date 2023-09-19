@@ -42,11 +42,11 @@
 				var fov = 45;   // if this changes, your code should still work
 				var fovRadians = fov * (Math.PI / 180); // todo -> convert degrees to radians
 
-				var pixelWidth = 1 / (pixelsAcross / 2); // todo -> what's the size of a pixel from left to right?
+				var pixelWidth = (2 / pixelsAcross); // todo -> what's the size of a pixel from left to right?
 				var pixelHalfWidth = pixelWidth / 2; // todo -> half of the pixel width
 
 				// How far away (scalar) the eye is from the image plane (see project guide for more info)
-				var eyeDistance = (pixelsAcross / 2) / Math.tan(fovRadians / 2); // = todo -> hint: related to tangent and field of view
+				var eyeDistance = 1 / Math.tan(fovRadians / 2); // = todo -> hint: related to tangent and field of view
 				// -----------
 				// |         / 
 				// |        /
@@ -118,20 +118,36 @@
 
 							// determine which hit object is the closest (in case there is more than 1 hit)
 							
+							// Create a Vector3 instance to be used as the light position (not a direction) at (1, 0, 0).  Next, use the normal at the intersection point and the direction from that point to the light to calculate the dot product.  Finally, set the color of the pixel using this value.
+
+							// Get the cos(theta) between the 2 vectors
+							// var normalDotLight = // todo  your calculation
+							var normalDotLight;
+							// setPixelColor(xPixelIndex, yPixelIndex, normalDotLight);
+							var direct;
+							// Your result should look similar to the image below. 
+
 							if(sphereResult.hit && planeResult.hit){
 								if(sphereResult.distance < planeResult.distance){
-									setPixelColor(xPixelIndex, yPixelIndex, 0.8); // middle gray
+									direct = light.clone().subtract(sphereResult.point);
+									normalDotLight = sphereResult.normal.clone().dot(direct); 
+									setPixelColor(xPixelIndex, yPixelIndex, normalDotLight); // middle gray
 								} else {
-									setPixelColor(xPixelIndex, yPixelIndex, 0.5); // middle gray
-
+									direct = planeResult.point.fromTo(planeResult.point, light).normalize(); 
+									normalDotLight = planeResult.normal.clone().dot(direct); 
+									setPixelColor(xPixelIndex, yPixelIndex, normalDotLight);
 								}
-							} else if(sphereResult.hit){
-								setPixelColor(xPixelIndex, yPixelIndex, 0.8); // middle gray
+							} else if(sphereResult.hit){ 
+								direct = light.clone().subtract(sphereResult.point);
+								normalDotLight = sphereResult.normal.clone().dot(direct); 
+								setPixelColor(xPixelIndex, yPixelIndex, normalDotLight);
 								// console.log("No");
 							} else if(planeResult.hit){
-								setPixelColor(xPixelIndex, yPixelIndex, 0.5); // middle gray
+								direct = planeResult.point.fromTo(planeResult.point, light).normalize(); 
+								normalDotLight = planeResult.normal.clone().dot(direct); 
+								setPixelColor(xPixelIndex, yPixelIndex, normalDotLight); 
 								//console.log("No");
-							} else{
+							} else{ 
 								//console.log("No");
 								setPixelColor(xPixelIndex, yPixelIndex, 0.1); // dark gray
 							}
@@ -142,14 +158,7 @@
 							// setPixelColor(xPixelIndex, yPixelIndex, 0.1); // dark gray
 							//}
 
-							// Create a Vector3 instance to be used as the light position (not a direction) at (1, 0, 0).  Next, use the normal at the intersection point and the direction from that point to the light to calculate the dot product.  Finally, set the color of the pixel using this value.
-
-							// Get the cos(theta) between the 2 vectors
-							// var normalDotLight = // todo  your calculation
-
-							// setPixelColor(xPixelIndex, yPixelIndex, normalDotLight);
-
-							// Your result should look similar to the image below. 
+							
  
 						}
 					}
