@@ -97,6 +97,7 @@
 
 				// -----------------------------------------------------------------------------
 				function updateAndRender(timeElapsed) {
+					var light = new Vector3(1, 0, 0); 
 					// Go through every pixel
 					// NOTE! You should only call setPixelColor once per pixel.  Otherwise, the
 					// last time you call it will be the color and overwrite previous calls.
@@ -117,7 +118,14 @@
 
 							// determine which hit object is the closest (in case there is more than 1 hit)
 							
-							if(sphereResult.hit){
+							if(sphereResult.hit && planeResult.hit){
+								if(sphereResult.distance < planeResult.distance){
+									setPixelColor(xPixelIndex, yPixelIndex, 0.8); // middle gray
+								} else {
+									setPixelColor(xPixelIndex, yPixelIndex, 0.5); // middle gray
+
+								}
+							} else if(sphereResult.hit){
 								setPixelColor(xPixelIndex, yPixelIndex, 0.8); // middle gray
 								// console.log("No");
 							} else if(planeResult.hit){
@@ -133,6 +141,16 @@
 							// we didn't hit anything, choose an appropriate backbround color
 							// setPixelColor(xPixelIndex, yPixelIndex, 0.1); // dark gray
 							//}
+
+							// Create a Vector3 instance to be used as the light position (not a direction) at (1, 0, 0).  Next, use the normal at the intersection point and the direction from that point to the light to calculate the dot product.  Finally, set the color of the pixel using this value.
+
+							// Get the cos(theta) between the 2 vectors
+							// var normalDotLight = // todo  your calculation
+
+							// setPixelColor(xPixelIndex, yPixelIndex, normalDotLight);
+
+							// Your result should look similar to the image below. 
+ 
 						}
 					}
 
