@@ -69,10 +69,11 @@
 
 				var sphere = new Sphere(new Vector3(0, 0, 0), 0.25); // todo = new Sphere(..., ...);
 				var plane = new Plane(new Vector3(0, 1, 0), new Vector3(0, -0.25, 0)); // todo = new Plane(..., ...);
-				var leftWall = new Plane(new Vector3(1,0,0), new Vector3(-1, 0, 0));   
-				var rightWall = new Plane(new Vector3(-1,0,0), new Vector3(1, 0, 0)); 
-				var ceiling = new Plane(new Vector3(0,-1,0), new Vector3(0, 1, 0));    
-				var backWall = new Plane(new Vector3(0,0,1), new Vector3(0, 0, -1));   
+				var leftWall = new Plane(new Vector3(1, 0, 0), new Vector3(-1, 0, 0), (1, 0, 0));
+				var rightWall = new Plane(new Vector3(-1, 0, 0), new Vector3(1, 0, 0), (0, 1, 0));
+				var ceiling = new Plane(new Vector3(0, -1, 0), new Vector3(0, 1, 0));
+				var backWall = new Plane(new Vector3(0, 0, 1), new Vector3(0, 0, -1));
+				let scenes = [plane, sphere, leftWall, rightWall, ceiling, backWall];
 
 				// end of raytracer setup ******************************************************
 
@@ -91,11 +92,11 @@
 				}
 
 				// -----------------------------------------------------------------------------
-				function setPixelColor(xPixelIndex, yPixelIndex, shadeOfGray /*[0,1]*/) {
+				function setPixelColor(xPixelIndex, yPixelIndex, color /*[0,1]*/) {
 					var index = (yPixelIndex * pixelsAcross + xPixelIndex) * 4; // 4 bytes per pixel
-					imageData.data[index + 0] = shadeOfGray * 255; // red channel
-					imageData.data[index + 1] = shadeOfGray * 255; // green channel
-					imageData.data[index + 2] = shadeOfGray * 255; // blue channel
+					imageData.data[index + 0] = color[0] * 255; // red channel
+					imageData.data[index + 1] = color[1] * 255; // green channel
+					imageData.data[index + 2] = color[2] * 255; // blue channel
 					imageData.data[index + 3] = 255;
 				}
 
@@ -105,82 +106,46 @@
 					lightPosX = Math.cos(seconds) * 0.5; // radius of 0.5
 					lightPosZ = Math.sin(seconds) * 0.5; // radius of 0.5
 
-					var light = new Vector3(lightPosX, 0, lightPosZ); 
+					var light = new Vector3(lightPosX, 0, lightPosZ);
 					// Go through every pixel
 					// NOTE! You should only call setPixelColor once per pixel.  Otherwise, the
 					// last time you call it will be the color and overwrite previous calls.
 					for (var yPixelIndex = 0; yPixelIndex < pixelsDown; ++yPixelIndex) {
 						for (var xPixelIndex = 0; xPixelIndex < pixelsAcross; ++xPixelIndex) {
 
-							var pixelRay = generateRayForPixel(xPixelIndex, yPixelIndex);							
-							
-							// See if the ray intersects the sphere or the plane (or every object in our scene)
-							// Uncomment when your sphere or plane code is ready
-							var sphereResult = sphere.raycast(pixelRay);
-							var planeResult = plane.raycast(pixelRay);
-							var leftResult = leftWall.raycast(pixelRay);
-							var rightResult = rightWall.raycast(pixelRay);
-							var ceilResult = ceiling.raycast(pixelRay);
-							var backResult = backWall.raycast(pixelRay);
+							var pixelRay = generateRayForPixel(xPixelIndex, yPixelIndex);
+							let plane;
+							let objectDistanceFromEye = 99999999999999999999999999999999;
 
-							// determine which hit object is the closest (in case there is more than 1 hit)
-							
-							// Create a Vector3 instance to be used as the light position (not a direction) at (1, 0, 0).  Next, use the normal at the intersection point and the direction from that point to the light to calculate the dot product.  Finally, set the color of the pixel using this value.
-
-							// Get the cos(theta) between the 2 vectors
-							// var normalDotLight = // todo  your calculation
-							var normalDotLight;
-							// setPixelColor(xPixelIndex, yPixelIndex, normalDotLight);
-							var direct;
-							var colRay;
-							// Your result should look similar to the image below. 
-
-							if(sphereResult.hit && planeResult.hit){
-								if(sphereResult.distance < planeResult.distance){
-									spherePoint = sphereResult.point;
-									shadowRay = new Ray(spherePoint, spherePoint.fromTo(spherePoint, light)); // 
-									shadowCheck = sphere.raycast(shadowRay);
-									if(shadowCheck.hit){
-										setPixelColor(xPixelIndex, yPixelIndex, 0);
-									} 
-
-									direct = light.clone().subtract(sphereResult.point);
-									normalDotLight = sphereResult.normal.clone().dot(direct); 
-									setPixelColor(xPixelIndex, yPixelIndex, normalDotLight); // middle gray
-								} else {
-									direct = planeResult.point.fromTo(planeResult.point, light).normalize(); 
-									normalDotLight = planeResult.normal.clone().dot(direct); 
-									setPixelColor(xPixelIndex, yPixelIndex, normalDotLight);
+							for (let object of scenes) {
+								let raycast = object.raycast(pixelRay);
+								if (raycast.distance < objectDistanceFromEye) {
+									objectDistanceFromEye = raycast.distance;
+									plane = object;
 								}
-							} else if(sphereResult.hit){ 
+							}
 
-								direct = light.clone().subtract(sphereResult.point);
-								normalDotLight = sphereResult.normal.clone().dot(direct); 
-								setPixelColor(xPixelIndex, yPixelIndex, normalDotLight);
-							} else if(planeResult.hit){
-								direct = planeResult.point.fromTo(planeResult.point, light).normalize(); 
-								normalDotLight = planeResult.normal.clone().dot(direct); 
-								setPixelColor(xPixelIndex, yPixelIndex, normalDotLight);
-							} else if(backResult.hit){
-								direct = backResult.point.fromTo(backResult.point, light).normalize(); 
-								normalDotLight = backResult.normal.clone().dot(direct); 
-								setPixelColor(xPixelIndex, yPixelIndex, normalDotLight); 
-							} else if(leftResult.hit){
-								direct = leftResult.point.fromTo(leftResult.point, light).normalize(); 
-								normalDotLight = leftResult.normal.clone().dot(direct); 
-								setPixelColor(xPixelIndex, yPixelIndex, normalDotLight); 
-							} else if(rightResult.hit){
-								direct = rightResult.point.fromTo(rightResult.point, light).normalize(); 
-								normalDotLight = rightResult.normal.clone().dot(direct); 
-								setPixelColor(xPixelIndex, yPixelIndex, normalDotLight); 
-							} else if(ceilResult.hit){
-								direct = ceilResult.point.fromTo(ceilResult.point, light).normalize(); 
-								normalDotLight = ceilResult.normal.clone().dot(direct); 
-								setPixelColor(xPixelIndex, yPixelIndex, normalDotLight); 
-							} else {
-								//console.log("No");
-								setPixelColor(xPixelIndex, yPixelIndex, 0.1); // dark gray
-							} 
+							let result = plane.raycast(pixelRay);
+							if (result.hit) {
+								planePoint = result.point;
+								shadowRay = new Ray(planePoint, planePoint.fromTo(planePoint, light)); // 
+								shadowCheck = sphere.raycast(shadowRay);
+
+								if (shadowCheck.hit) {
+									var temp = light.clone().dot(planePoint.fromTo(planePoint, light))
+									if (temp <= 0) {
+										direct = result.point.fromTo(result.point, light).normalize();
+										normalDotLight = result.normal.clone().dot(direct);
+										setPixelColor(xPixelIndex, yPixelIndex, [plane.color[0] * normalDotLight, plane.color[1] * normalDotLight, plane.color[2] * normalDotLight]);
+									} else {
+										setPixelColor(xPixelIndex, yPixelIndex, [0, 0, 0]);
+									}
+								} else {
+									direct = result.point.fromTo(result.point, light).normalize();
+									normalDotLight = result.normal.clone().dot(direct);
+									setPixelColor(xPixelIndex, yPixelIndex, [plane.color[0] * normalDotLight, plane.color[1] * normalDotLight, plane.color[2] * normalDotLight]);
+								}
+							}
 						}
 					}
 
