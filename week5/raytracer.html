@@ -69,8 +69,8 @@
 
 				var sphere = new Sphere(new Vector3(0, 0, 0), 0.25); // todo = new Sphere(..., ...);
 				var plane = new Plane(new Vector3(0, 1, 0), new Vector3(0, -0.25, 0)); // todo = new Plane(..., ...);
-				var leftWall = new Plane(new Vector3(1, 0, 0), new Vector3(-1, 0, 0), (1, 0, 0));
-				var rightWall = new Plane(new Vector3(-1, 0, 0), new Vector3(1, 0, 0), (0, 1, 0));
+				var leftWall = new Plane(new Vector3(1, 0, 0), new Vector3(-1, 0, 0), [1, 0, 0]);
+				var rightWall = new Plane(new Vector3(-1, 0, 0), new Vector3(1, 0, 0), [0, 1, 0]);
 				var ceiling = new Plane(new Vector3(0, -1, 0), new Vector3(0, 1, 0));
 				var backWall = new Plane(new Vector3(0, 0, 1), new Vector3(0, 0, -1));
 				let scenes = [plane, sphere, leftWall, rightWall, ceiling, backWall];
