@@ -127,7 +127,7 @@ Matrix4.prototype = {
       temp.w = vals[3];
       vectors.push(temp);
     }
-    
+
     let col1 = this.multiplyVector(vectors[0]);
     let col2 = this.multiplyVector(vectors[1]);
     let col3 = this.multiplyVector(vectors[2]);
@@ -226,7 +226,7 @@ Matrix4.prototype = {
     var fovyRads = fovy * (Math.PI / 180);
 
     // t is the tangent of half of the rads
-    t = Math.tan(fovyRads/2)
+    t = Math.tan(fovyRads / 2)
     r = t * aspect
 
     // shortcut - use in place of this.elements
@@ -243,11 +243,11 @@ Matrix4.prototype = {
     // 3, 2 = -1
 
     this.makeIdentity;
-    e[0] = near / r; 
-    e[5] = near / t; 
-    e[10] = -((far + near) / (far - near)); 
-    e[11] = -((2 * (far * near)) / (far - near)); 
-    e[14] = -1; 
+    e[0] = near / r;
+    e[5] = near / t;
+    e[10] = -((far + near) / (far - near));
+    e[11] = -((2 * (far * near)) / (far - near));
+    e[14] = -1;
     e[15] = 0;
 
     return this;
@@ -276,7 +276,7 @@ Matrix4.prototype = {
     e[0] = 2 / (right - left);
     e[5] = 2 / (top - bottom);
     e[10] = -2 / (far - near);
-    e[3] = -((right + left) / (right - left)) 
+    e[3] = -((right + left) / (right - left))
     e[7] = -((top + bottom) / (top - bottom))
     e[11] = -((far + near) / (far - near))
     return this;
@@ -287,12 +287,10 @@ Matrix4.prototype = {
   // @rotation - a Matrix4 rotation Matrix
   // @scale - a Matrix4 scale matrix
   createTRSMatrix: function (translation, rotation, scale) {
-    // todo - create a matrix that combines translation, rotation, and scale such
-    //        that TRANSFORMATIONS take place in the following order: 1) scale,
-    //        2) rotation, and 3) translation. The values of translation, rotation,
-    //        and scale should NOT be modified.
-
     var trsMatrix = new Matrix4();
+    trsMatrix.makeIdentity();
+    trsMatrix.multiply(translation).multiply(rotation).multiply(scale);
+
     return trsMatrix;
   },
 
@@ -302,18 +300,26 @@ Matrix4.prototype = {
   // @earthTransform - the transformation used to apply to the earth
   createMoonMatrix: function (currentRotationAngle, offsetFromEarth, earthTransform) {
 
-    // todo - create a matrix that combines translation and rotation such that when
-    //        it is applied to a sphere starting at the origin, moves the sphere to 
-    //        orbit the earth.  The displacement from the earth is given by  
-    //        "offsetFromEarth" and the current rotation around the earth (z-axis)
-    //        is given by "currentRotationAngle" degrees.
+    /* todo - create a matrix that combines translation and rotation such that
+           when it is applied to a sphere starting at the origin, moves the sphere to 
+           orbit the earth.  The displacement from the earth is given by  
+           "offsetFromEarth" and the current rotation around the earth (z-axis)
+           is given by "currentRotationAngle" degrees.*/
 
     // Note: Do NOT change earthTransform but do use it, it already has the rotation and translation for the earth
 
+
+    // offset -> rotate -> transform
+
+    let rotation = new Matrix4().makeRotationZ(currentRotationAngle);
+    let translation = new Matrix4().makeTranslation(offsetFromEarth);
+    let scale = new Matrix4().makeScale(1, 1, 1);
+    let rts = this.createTRSMatrix(rotation, translation, scale);
+
     var moonMatrix = new Matrix4();
-
-    // todo - combine all necessary matrices necessary to achieve the desired effect
-
+    moonMatrix.multiply(earthTransform);
+    moonMatrix.multiply(rts);
+    
     return moonMatrix;
   },
 
