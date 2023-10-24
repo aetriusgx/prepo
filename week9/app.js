@@ -152,6 +152,8 @@ function updateAndRender() {
     gl.uniform4f(colorProgram.uniforms.colorUniform, 1.0, 1.0, 1.0, 1.0);
 
     // todo #9 - animate the color of there sphere
+    let osc = Math.abs(Math.sin(time.secondsElapsedSinceStart));
+    gl.uniform4f(colorProgram.uniforms.colorUniform, osc, 1.0 - osc, osc, 1.0);
     // todo #10 - animate the color with non-grayscale values
 
     // todo #3 - render the sphere
