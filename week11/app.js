@@ -133,6 +133,20 @@ function updateAndRender() {
 
     // todo #10
     // add keyboard controls for changing light direction here
+    if (appInput.left) {
+        // todo #8 - add a little bit to the current camera yaw
+        let rotL = new Matrix4().makeRotationY(-3)
+        let ldVec4 = new Vector4(lightDirection.x, lightDirection.y, lightDirection.z, 0)
+        lightDirection = rotL.multiplyVector(ldVec4)
+
+    }
+
+    if (appInput.right) {
+        // todo #8 - subtract a little bit from the current camera yaw
+        let rotR = new Matrix4().makeRotationY(3)
+        let ldVec4 = new Vector4(lightDirection.x, lightDirection.y, lightDirection.z, 1)
+        lightDirection = rotR.multiplyVector(ldVec4)
+    }
 
     time.update();
     camera.update(time.deltaTime);
