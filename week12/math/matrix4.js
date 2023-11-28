@@ -276,6 +276,23 @@ Matrix4.prototype = {
   },
 
   // -------------------------------------------------------------------------
+  makeLookAt: function(eyePos, targetPos, worldUp) {
+    this.makeIdentity();
+    var forward = targetPos.clone().subtract(eyePos).normalize();
+    var right = forward.clone().normalize().cross(worldUp).normalize();
+    var up = right.cross(forward);
+
+    var e = this.elements;
+    e[0] = right.x; e[1] = up.x; e[2] = -forward.x; e[3] = eyePos.x;
+    e[4] = right.y; e[5] = up.y; e[6] = -forward.y; e[7] = eyePos.y;
+    e[8] = right.z; e[9] = up.z; e[10] = -forward.z; e[11] = eyePos.z;
+    e[12] = 0; e[13] = 0; e[14] = 0; e[15] = 1;
+
+    return this;
+  },
+
+
+  // -------------------------------------------------------------------------
   determinant: function() {
     var e = this.elements;
 

@@ -4,230 +4,277 @@ var gl;
 
 var appInput = new Input();
 var time = new Time();
-var camera = new OrbitCamera(appInput);
+var camera = new OrbitCamera(appInput); // used to create the view matrix for our normal "eye"
+var lightCamera = new Camera();         // used to create the view matrix for our light's point of view
 
-var sphereGeometry = null; // this will be created after loading from a file
+var teapotGeometry = null;
 var groundGeometry = null;
-var barrelGeometry = null;
-var lightGeometry = null;
 
+// the projection from our normal eye's view space to its clip space
 var projectionMatrix = new Matrix4();
-var lightDirection = new Vector3(4, 1.5, 0);
 
-// the shader that will be used by each piece of geometry (they could each use their own shader but in this case it will be the same)
+// the projection from the light's view space to its clip space
+var shadowProjectionMatrix = new Matrix4();
+
+// although our light will be a directional light, we need to render depth from its point of view starting somewhere relatively close
+var lightPos = new Vector4(5, 3, 0, 1);
+var directionToLight = new Vector4(lightPos.x, lightPos.y, lightPos.z, 0).normalize();
+
+// the shader used to render depth values from the light's point of view
+var depthWriteProgram;
+
+// the shader program used to apply phong shading (will include shadow test)
 var phongShaderProgram;
-var flatShaderProgram;
 
-// auto start the app when the html page is ready
+// variables holding references to things we need to render to an offscreen texture
+var fbo;
+var renderTexture;
+var renderBuffer;
+
 window.onload = window['initializeAndStartRendering'];
 
-// we need to asynchronously fetch files from the "server" (your local hard drive)
 var loadedAssets = {
-    phongTextVS: null, phongTextFS: null,
-    sphereJSON: null,
-    barrelJSON: null,
-    marbleImage: null,
-    crackedMudImage: null,
-    barrelImage: null,
-    flatTextVS:null, flatTextFS: null,
+	phongTextVS: null, phongTextFS: null,
+	depthWriteVS: null, depthWriteFS: null,
+	teapotJSON: null,
+	marbleImage: null,
+	woodImage: null
 };
 
 // -------------------------------------------------------------------------
 function initializeAndStartRendering() {
-    initGL();
-    loadAssets(function() {
-        createShaders(loadedAssets);
-        createScene();
+	initGL();
+	loadAssets(function () {
+		createShaders(loadedAssets);
+		createScene();
+		createFrameBufferResources();
 
-        updateAndRender();
-    });
+		updateAndRender();
+	});
 }
 
 // -------------------------------------------------------------------------
 function initGL(canvas) {
-    var canvas = document.getElementById("webgl-canvas");
+	var canvas = document.getElementById("webgl-canvas");
 
-    try {
-        gl = canvas.getContext("webgl");
-        gl.canvasWidth = canvas.width;
-        gl.canvasHeight = canvas.height;
+	try {
+		gl = canvas.getContext("webgl");
+		gl.canvasWidth = canvas.width;
+		gl.canvasHeight = canvas.height;
 
-        gl.enable(gl.DEPTH_TEST);
-    } catch (e) {}
+		gl.enable(gl.DEPTH_TEST);
+	} catch (e) { }
 
-    if (!gl) {
-        alert("Could not initialise WebGL, sorry :-(");
-    }
+	if (!gl) {
+		alert("Could not initialise WebGL, sorry :-(");
+	}
 }
 
 // -------------------------------------------------------------------------
 function loadAssets(onLoadedCB) {
-    var filePromises = [
-        fetch('./shaders/phong.vs.glsl').then((response) => { return response.text(); }),
-        fetch('./shaders/phong.directionlit.fs.glsl').then((response) => { return response.text(); }),
-        fetch('./data/sphere.json').then((response) => { return response.json(); }),
-        fetch('./data/barrel.json').then((response) => { return response.json(); }),
-        loadImage('./data/marble.jpg'),
-        loadImage('./data/crackedMud.png'),
-        loadImage('./data/barrel.png'),
-        fetch('./shaders/flat.color.vs.glsl').then((response) => { return response.text(); }),
-        fetch('./shaders/flat.color.fs.glsl').then((response) => { return response.text(); })
-    ];
+	var filePromises = [
+		fetch('./shaders/phong.vs.glsl').then((response) => { return response.text(); }),
+		fetch('./shaders/phong.fs.glsl').then((response) => { return response.text(); }),
+		fetch('./data/teapot.json').then((response) => { return response.json(); }),
+		fetch('./shaders/depth-write.vs.glsl').then((response) => { return response.text(); }),
+		fetch('./shaders/depth-write.fs.glsl').then((response) => { return response.text(); }),
+		loadImage('./data/marble.jpg'),
+		loadImage('./data/wood-floor.jpg'),
+	];
 
-    Promise.all(filePromises).then(function(values) {
-        // Assign loaded data to our named variables
-        loadedAssets.phongTextVS = values[0];
-        loadedAssets.phongTextFS = values[1];
-        loadedAssets.sphereJSON = values[2];
-        loadedAssets.barrelJSON = values[3]
-        loadedAssets.marbleImage = values[4];
-        loadedAssets.crackedMudImage = values[5];
-        loadedAssets.barrelImage = values[6];
-        loadedAssets.flatTextVS = values[7];
-        loadedAssets.flatTextFS = values[8];
-
-    }).catch(function(error) {
-        console.error(error.message);
-    }).finally(function() {
-        onLoadedCB();
-    });
+	Promise.all(filePromises).then(function (values) {
+		// Assign loaded data to our named variables
+		loadedAssets.phongTextVS = values[0];
+		loadedAssets.phongTextFS = values[1];
+		loadedAssets.teapotJSON = values[2];
+		loadedAssets.depthWriteVS = values[3];
+		loadedAssets.depthWriteFS = values[4];
+		loadedAssets.marbleImage = values[5];
+		loadedAssets.woodImage = values[6];
+	}).catch(function (error) {
+		console.error(error.message);
+	}).finally(function () {
+		onLoadedCB();
+	});
 }
 
 // -------------------------------------------------------------------------
 function createShaders(loadedAssets) {
-    phongShaderProgram = createCompiledAndLinkedShaderProgram(loadedAssets.phongTextVS, loadedAssets.phongTextFS);
+	depthWriteProgram = createCompiledAndLinkedShaderProgram(loadedAssets.depthWriteVS, loadedAssets.depthWriteFS);
 
-    phongShaderProgram.attributes = {
-        vertexPositionAttribute: gl.getAttribLocation(phongShaderProgram, "aVertexPosition"),
-        vertexNormalsAttribute: gl.getAttribLocation(phongShaderProgram, "aNormal"),
-        vertexTexcoordsAttribute: gl.getAttribLocation(phongShaderProgram, "aTexcoords")
-    };
+	depthWriteProgram.attributes = {
+		vertexPositionAttribute: gl.getAttribLocation(depthWriteProgram, "aVertexPosition"),
+	};
 
-    phongShaderProgram.uniforms = {
-        worldMatrixUniform: gl.getUniformLocation(phongShaderProgram, "uWorldMatrix"),
-        viewMatrixUniform: gl.getUniformLocation(phongShaderProgram, "uViewMatrix"),
-        projectionMatrixUniform: gl.getUniformLocation(phongShaderProgram, "uProjectionMatrix"),
-        lightDirectionUniform: gl.getUniformLocation(phongShaderProgram, "uLightDirection"),
-        cameraPositionUniform: gl.getUniformLocation(phongShaderProgram, "uCameraPosition"),
-        textureUniform: gl.getUniformLocation(phongShaderProgram, "uTexture"),
-    };
+	depthWriteProgram.uniforms = {
+		worldMatrixUniform: gl.getUniformLocation(depthWriteProgram, "uWorldMatrix"),
+		viewMatrixUniform: gl.getUniformLocation(depthWriteProgram, "uViewMatrix"),
+		projectionMatrixUniform: gl.getUniformLocation(depthWriteProgram, "uProjectionMatrix"),
+	};
 
-    flatShaderProgram = createCompiledAndLinkedShaderProgram(loadedAssets.flatTextVS, loadedAssets.flatTextFS);
+	phongShaderProgram = createCompiledAndLinkedShaderProgram(loadedAssets.phongTextVS, loadedAssets.phongTextFS);
 
-    flatShaderProgram.attributes = {
-        vertexPositionAttribute: gl.getAttribLocation(flatShaderProgram, "aVertexPosition"),
-        vertexNormalsAttribute: gl.getAttribLocation(flatShaderProgram, "aNormal"),
-        vertexTexcoordsAttribute: gl.getAttribLocation(flatShaderProgram, "aTexcoords")
-    };
+	phongShaderProgram.attributes = {
+		vertexPositionAttribute: gl.getAttribLocation(phongShaderProgram, "aVertexPosition"),
+		vertexTexCoordsAttribute: gl.getAttribLocation(phongShaderProgram, "aTexCoords"),
+		vertexNormalsAttribute: gl.getAttribLocation(phongShaderProgram, "aNormal"),
+	};
 
-    flatShaderProgram.uniforms = {
-        worldMatrixUniform: gl.getUniformLocation(flatShaderProgram, "uWorldMatrix"),
-        viewMatrixUniform: gl.getUniformLocation(flatShaderProgram, "uViewMatrix"),
-        projectionMatrixUniform: gl.getUniformLocation(flatShaderProgram, "uProjectionMatrix"),
-        lightDirectionUniform: gl.getUniformLocation(flatShaderProgram, "uLightDirection"),
-        cameraPositionUniform: gl.getUniformLocation(flatShaderProgram, "uCameraPosition"),
-        textureUniform: gl.getUniformLocation(flatShaderProgram, "uTexture"),
-    };
+	phongShaderProgram.uniforms = {
+		worldMatrixUniform: gl.getUniformLocation(phongShaderProgram, "uWorldMatrix"),
+		viewMatrixUniform: gl.getUniformLocation(phongShaderProgram, "uViewMatrix"),
+		projectionMatrixUniform: gl.getUniformLocation(phongShaderProgram, "uProjectionMatrix"),
+		directionToLightUniform: gl.getUniformLocation(phongShaderProgram, "uDirectionToLight"),
+		lightVPMatrixUniform: gl.getUniformLocation(phongShaderProgram, "uLightVPMatrix"),
+		cameraPositionUniform: gl.getUniformLocation(phongShaderProgram, "uCameraPosition"),
+		albedoTextureUniform: gl.getUniformLocation(phongShaderProgram, "uAlbedoTexture"),
+		shadowTextureUniform: gl.getUniformLocation(phongShaderProgram, "uShadowTexture")
+	};
 }
 
 // -------------------------------------------------------------------------
 function createScene() {
-    groundGeometry = new WebGLGeometryQuad(gl, phongShaderProgram);
-    groundGeometry.create(loadedAssets.crackedMudImage);
+	teapotGeometry = new WebGLGeometryJSON(gl, phongShaderProgram);
+	teapotGeometry.create(loadedAssets.teapotJSON, loadedAssets.marbleImage);
 
-    var scale = new Matrix4().makeScale(10.0, 10.0, 10.0);
+	var scale = new Matrix4().makeScale(0.03, 0.03, 0.03);
 
-    // compensate for the model being flipped on its side
-    var rotation = new Matrix4().makeRotationX(-90);
+	// compensate for the model being flipped on its side
+	var rotation = new Matrix4().makeRotationX(-90);
 
-    groundGeometry.worldMatrix.makeIdentity();
-    groundGeometry.worldMatrix.multiply(rotation).multiply(scale);
+	teapotGeometry.worldMatrix.makeIdentity();
+	teapotGeometry.worldMatrix.multiply(rotation);
+	teapotGeometry.worldMatrix.multiply(scale);
 
-    sphereGeometry = new WebGLGeometryJSON(gl, phongShaderProgram);
-    sphereGeometry.create(loadedAssets.sphereJSON, loadedAssets.marbleImage);
+	groundGeometry = new WebGLGeometryQuad(gl, phongShaderProgram);
+	groundGeometry.create(loadedAssets.woodImage);
 
-    barrelGeometry = new WebGLGeometryJSON(gl, phongShaderProgram);
-    barrelGeometry.create(loadedAssets.barrelJSON, loadedAssets.barrelImage);
+	// make it bigger
+	var groundScale = new Matrix4().makeScale(10.0, 10.0, 10.0);
 
-    
+	// compensate for the model being flipped on its side
+	var groundRotation = new Matrix4().makeRotationX(-90);
 
-    // Scaled it down so that the diameter is 3
-    var scale = new Matrix4().makeScale(0.03, 0.03, 0.03);
-    var scale2 = new Matrix4().makeScale(0.3, 0.3, 0.3);
-    
+	groundGeometry.worldMatrix.multiply(groundRotation).multiply(groundScale);
+}
 
-    // raise it by the radius to make it sit on the ground
-    var translation = new Matrix4().makeTranslation(0, 1.5, 0);
-    var translation2 = new Matrix4().makeTranslation(-5, 2, -5);
-    
+// -------------------------------------------------------------------------
+function createFrameBufferResources() {
+	var dimension = 2048;
+	var width = dimension, height = dimension;
 
-    sphereGeometry.worldMatrix.makeIdentity();
-    sphereGeometry.worldMatrix.multiply(translation).multiply(scale);
+	// This lets WebGL know we want to use these extensions (not default in WebGL1)
+	gl.getExtension("OES_texture_float");
+	gl.getExtension("OES_texture_float_linear");
 
-    barrelGeometry.worldMatrix.makeIdentity();
-    barrelGeometry.worldMatrix.multiply(translation2).multiply(scale2);
+	// create and set up the texture that will be rendered into
+	renderTexture = gl.createTexture();
+	gl.bindTexture(gl.TEXTURE_2D, renderTexture);
+	gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, width, height, 0, gl.RGBA, gl.FLOAT, null);
+	gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST);
+	gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST);
+	gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+	gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
 
-    lightGeometry = new WebGLGeometryJSON(gl, flatShaderProgram);
-    lightGeometry.create(loadedAssets.sphereJSON);
-    var scale3 = new Matrix4().makeScale(0.01, 0.01, 0.01);
-    var translation3 = new Matrix4().makeTranslation(lightDirection.x, lightDirection.y, lightDirection.z);
-    lightGeometry.worldMatrix.makeIdentity();
-    lightGeometry.worldMatrix.multiply(translation3).multiply(scale3);
+	// create an alternate frame buffer that we will render depth into (works in conjunction with the texture we just created)
+	fbo = gl.createFramebuffer();
+	gl.bindFramebuffer(gl.FRAMEBUFFER, fbo);
+	gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, renderTexture, 0);
+	fbo.width = fbo.height = dimension;
 
+	renderBuffer = gl.createRenderbuffer();
+	gl.bindRenderbuffer(gl.RENDERBUFFER, renderBuffer);
+
+	gl.renderbufferStorage(gl.RENDERBUFFER, gl.DEPTH_COMPONENT16, width, height);
+	gl.framebufferRenderbuffer(gl.FRAMEBUFFER, gl.DEPTH_ATTACHMENT, gl.RENDERBUFFER, renderBuffer);
+
+	gl.bindTexture(gl.TEXTURE_2D, null);
+	gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+	gl.bindRenderbuffer(gl.RENDERBUFFER, null);
+
+	checkFrameBufferStatus();
 }
 
 // -------------------------------------------------------------------------
 function updateAndRender() {
-    requestAnimationFrame(updateAndRender);
+	requestAnimationFrame(updateAndRender);
 
-    var aspectRatio = gl.canvasWidth / gl.canvasHeight;
+	// Get the latest values for deltaTime and elapsedTime
+	time.update();
 
-    // todo #10
-    // add keyboard controls for changing light direction here
-    // if (appInput.left) {
-    //     // todo #8 - add a little bit to the current camera yaw
-    //     let rotL = new Matrix4().makeRotationY(-3)
-    //     let ldVec4 = new Vector4(lightDirection.x, lightDirection.y, lightDirection.z, 0)
-    //     lightDirection = rotL.multiplyVector(ldVec4)
+	var aspectRatio = gl.canvasWidth / gl.canvasHeight;
 
-    // }
+	var yaw = 0, pitch = 0;
+	if (appInput.a) yaw -= 1;
+	if (appInput.d) yaw += 1;
+	if (appInput.w) pitch -= 1;
+	if (appInput.s) pitch += 1;
 
-    // if (appInput.right) {
-    //     // todo #8 - subtract a little bit from the current camera yaw
-    //     let rotR = new Matrix4().makeRotationY(3)
-    //     let ldVec4 = new Vector4(lightDirection.x, lightDirection.y, lightDirection.z, 1)
-    //     lightDirection = rotR.multiplyVector(ldVec4)
-    // }
-    let rotL = new Matrix4().makeRotationY(-1)
-    let ldVec4 = new Vector4(lightDirection.x, lightDirection.y, lightDirection.z, 0)
-    lightDirection = rotL.multiplyVector(ldVec4)
+	var yawMatrix = new Matrix4().makeRotationY(45.0 * time.deltaTime * yaw);
+	var pitchMatrix = new Matrix4().makeRotationX(45.0 * time.deltaTime * pitch);
 
-    var translation3 = new Matrix4().makeTranslation(lightDirection.x, lightDirection.y, lightDirection.z);
-    var scale3 = new Matrix4().makeScale(0.005, 0.005, 0.005);
-    lightGeometry.worldMatrix.makeIdentity();
-    lightGeometry.worldMatrix.multiply(translation3).multiply(scale3);
+	// Rotate the light direction
+	var rotationMatrix = pitchMatrix.clone().multiply(yawMatrix);
+	directionToLight = rotationMatrix.multiplyVector(directionToLight);
 
-    time.update();
-    camera.update(time.deltaTime);
+	// Rotate the position where out light-camera position will move to
+	lightPos = rotationMatrix.multiplyVector(lightPos);
 
-    // specify what portion of the canvas we want to draw to (all of it, full width and height)
-    gl.viewport(0, 0, gl.canvasWidth, gl.canvasHeight);
+	var lightTarget = new Vector4(0, 0, 0, 1);
+	var up = new Vector4(0, 1, 0, 0);
 
-    // this is a new frame so let's clear out whatever happened last frame
-    gl.clearColor(0.707, 0.707, 1, 1.0);
-    gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
+	// todo #1 - Set up a camera that points in the direction of the light at a
+	// reasonably close position such that the scene will be in the view volume.
+	// We will set up the view volume boundaries with an orthographics projection later.
+	var t1 = new Vector3(5, 3, 0)
+	var t2 = new Vector3(0, 0, 0)
+	var t3 = new Vector3(0, 1, 0)
+	lightCamera.cameraWorldMatrix.makeLookAt(lightPos, t2, t3);
+	camera.update(time.deltaTime);
 
-    gl.useProgram(phongShaderProgram);
-    var uniforms = phongShaderProgram.uniforms;
-    var cameraPosition = camera.getPosition();
-    gl.uniform3f(uniforms.lightDirectionUniform, lightDirection.x, lightDirection.y, lightDirection.z);
-    gl.uniform3f(uniforms.cameraPositionUniform, cameraPosition.x, cameraPosition.y, cameraPosition.z);
+	// render scene depth to texture ################## 
 
-    projectionMatrix.makePerspective(45, aspectRatio, 0.1, 1000);
-    groundGeometry.render(camera, projectionMatrix, phongShaderProgram);
-    sphereGeometry.render(camera, projectionMatrix, phongShaderProgram);
-    barrelGeometry.render(camera, projectionMatrix, phongShaderProgram);
-    lightGeometry.render(camera, projectionMatrix, flatShaderProgram);
+	gl.bindFramebuffer(gl.FRAMEBUFFER, fbo);
+	gl.bindRenderbuffer(gl.RENDERBUFFER, renderBuffer);
+
+	gl.clearColor(0, 1, 0, 1.0);
+	gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
+
+	// specify what portion of the canvas we want to draw to (all of it, full width and height)
+	gl.viewport(0, 0, fbo.width, fbo.height);
+
+	// todo #2 - set up the view volume boundaries
+	shadowProjectionMatrix.makeOrthographic(-10, 10, 10, -10, 1.0, 20);
+
+	gl.disable(gl.CULL_FACE);
+	groundGeometry.render(lightCamera, shadowProjectionMatrix, depthWriteProgram);
+	teapotGeometry.render(lightCamera, shadowProjectionMatrix, depthWriteProgram);
+
+	gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+	gl.bindRenderbuffer(gl.RENDERBUFFER, null);
+
+	// render scene normally and use the depth texture to apply shadows ################
+
+	// specify what portion of the canvas we want to draw to (all of it, full width and height)
+	gl.viewport(0, 0, gl.canvasWidth, gl.canvasHeight);
+
+	// this is a new frame so let's clear out whatever happened last frame
+	gl.clearColor(0.707, 0.707, 1, 1.0);
+	gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
+
+	var lightVPMatrix = shadowProjectionMatrix.clone().multiply(lightCamera.getViewMatrix());
+
+	gl.useProgram(phongShaderProgram);
+	var uniforms = phongShaderProgram.uniforms;
+	var cameraPosition = camera.getPosition();
+	gl.uniform3f(uniforms.directionToLightUniform, directionToLight.x, directionToLight.y, directionToLight.z);
+	gl.uniform3f(uniforms.cameraPositionUniform, cameraPosition.x, cameraPosition.y, cameraPosition.z);
+	gl.uniformMatrix4fv(uniforms.lightVPMatrixUniform, false, lightVPMatrix.transpose().elements);
+
+	projectionMatrix.makePerspective(45, aspectRatio, 0.1, 1000);
+	gl.enable(gl.CULL_FACE);
+	groundGeometry.render(camera, projectionMatrix, phongShaderProgram, renderTexture);
+	teapotGeometry.render(camera, projectionMatrix, phongShaderProgram, renderTexture);
 }
 
 // EOF 00100001-10
